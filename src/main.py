@@ -13,7 +13,8 @@ from PIL import Image
 import cv2
 import numpy as np
 from sqlalchemy import false
-
+import requests
+import re
 from utils.fileutils import format_file_size
 
 
@@ -37,6 +38,8 @@ class DragDropLabel(QLabel):
             if local_path.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif')):
                 self.parent_widget.add_image_file(local_path)
         event.acceptProposedAction()
+
+
 
 class MainWindow(QWidget):
     def __init__(self):
@@ -72,9 +75,21 @@ class MainWindow(QWidget):
         clear_btn = QPushButton("清空列表")
         clear_btn.clicked.connect(self.clear_list)
         clear_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        # 新增：格式化数据按钮
+        format_btn = QPushButton("格式化数据")
+        format_btn.clicked.connect(self.format_text_edit_content)
+        format_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
 
+        # 新增：核验票据按钮（占位）
+        verify_btn = QPushButton("核验票据")
+        verify_btn.clicked.connect(self.verify_invoice)
+        verify_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+
+        # 按钮布局
         btn_layout = QHBoxLayout()
         btn_layout.addWidget(clear_btn)
+        btn_layout.addWidget(format_btn)
+        btn_layout.addWidget(verify_btn)
         btn_layout.addStretch()  # 让按钮靠左
 
         right_layout.addLayout(btn_layout)
@@ -160,6 +175,134 @@ class MainWindow(QWidget):
         except Exception as e:
             print( "错误", f"识别失败：{e}")
             QMessageBox.warning(self, "错误", f"识别失败：{e}")
+
+
+    # deepseek-chat 的模型调用
+    # def format_text_edit_content(self):
+    #     # 请求地址
+    #     url = "https://api.deepseek.com/chat/completions"
+    #     # 请求头
+    #     headers = {
+    #         "Authorization": "Bearer sk-e99fc0af3461439395a7a1507d1cde1b",
+    #         "Content-Type": "application/json"
+    #     }
+    #     # 构建 content 文本
+    #     prompt = (
+    #         "格式化下面信息，以下面格式发我：\n"
+    #         "{\n"
+    #         '  "InvoiceNo": "25347000000854698562",\n'
+    #         '  "InvoiceDate": "2021-07-11",\n'
+    #         '  "Amount": "12.45"\n'
+    #         "}\n\n"
+    #         "InvoiceNo表示发票号码，InvoiceDate表示开票日期，Amount表示合计金额。\n\n"
+    #     )
+    #     # 加上 text_edit 中的内容
+    #     full_content = prompt + self.text_edit.toPlainText()
+    #     # 请求体参数
+    #     payload = {
+    #         "messages": [
+    #             {
+    #                 "role": "system",
+    #                 "content": full_content
+    #             }
+    #         ],
+    #         "model": "deepseek-chat",
+    #         "frequency_penalty": 0,
+    #         "max_tokens": 2048,
+    #         "presence_penalty": 0,
+    #         "response_format": {
+    #             "type": "text"
+    #         },
+    #         "stop": None,
+    #         "stream": False,
+    #         "stream_options": None,
+    #         "temperature": 1,
+    #         "top_p": 1,
+    #         "tools": None,
+    #         "tool_choice": "none",
+    #         "logprobs": False,
+    #         "top_logprobs": None
+    #     }
+    #     print("请求内容:", payload)
+    #     # 发起 POST 请求
+    #     response = requests.post(url, headers=headers, json=payload)
+    #
+    #     # 输出响应结果
+    #     print("状态码:", response.status_code)
+    #     try:
+    #         print("响应内容:", response.text)
+    #         data = json.loads(response.text)
+    #         # 获取 content 内容
+    #         content = data['choices'][0]['message']['content']
+    #         print("content的信息"+content)
+    #         # 去除 ```json ``` 标签
+    #         json_str = re.sub(r'^```json\n|\n```$', '', content.strip())
+    #         print("去除 ```json ``` 标签:", json_str)
+    #         # 转成字典
+    #         self.text_edit.setPlainText(json_str)
+    #
+    #     except Exception:
+    #         self.text_edit.setPlainText(response.text)
+    #         print("响应内容非 JSON:", response.text)
+
+    # 豆包的模型调用
+    def format_text_edit_content(self):
+
+        # 请求地址
+        url = "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
+        # 请求头
+        headers = {
+            "Authorization": "Bearer 746a3207-6de6-4fd3-be02-c4c6fe7bf6eb",
+            "Content-Type": "application/json"
+        }
+        # 构建 content 文本
+        prompt = (
+            "格式化下面信息，以下面格式发我：\n"
+            "{\n"
+            '  "InvoiceNo": "25347000000854698562",\n'
+            '  "InvoiceDate": "2021-07-11",\n'
+            '  "Amount": "12.45"\n'
+            "}\n\n"
+            "InvoiceNo表示发票号码，InvoiceDate表示开票日期，Amount表示合计金额。\n\n"
+        )
+        # 加上 text_edit 中的内容
+        full_content = prompt + self.text_edit.toPlainText()
+        # 请求体参数
+        payload = {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": full_content
+                }
+            ],
+            "model": "doubao-seed-1.6-250615",
+            "thinking":{
+                "type":"disabled"
+            }
+        }
+        print("请求内容:", payload)
+        # 发起 POST 请求
+        response = requests.post(url, headers=headers, json=payload)
+
+        # 输出响应结果
+        print("状态码:", response.status_code)
+        try:
+            print("响应内容:", response.text)
+            data = json.loads(response.text)
+            # 获取 content 内容
+            content = data['choices'][0]['message']['content']
+            print("content的信息"+content)
+            # 转成字典
+            self.text_edit.setPlainText(content)
+
+        except Exception:
+            self.text_edit.setPlainText(response.text)
+            print("响应内容非 JSON:", response.text)
+
+    def verify_invoice(self):
+        # 暂未实现功能，可扩展接入发票查验接口
+        QMessageBox.information(self, "提示", "核验票据功能暂未实现。")
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
